@@ -37,6 +37,7 @@ k=3;
 trails=10;
 Npred=zeros(1,35,trails);
 for (i=1:trails)
+   U(1:Nx) = 0 ;
    U(randperm(Nx-2,k)+1)=100;
    U=abs(U);
    Unit=U;
