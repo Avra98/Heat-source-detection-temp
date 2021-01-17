@@ -1,5 +1,5 @@
-N = 71;  #DImension
-Ncount=100;  ##Actual ncount
+N = 51;  
+Ncount=400;
 
 %--boundary conditions----------------------------------------------------
 U(1:N,1:N) = 0;
@@ -53,18 +53,24 @@ Unitv= reshape(Unit,[N^2,1]);
  %A=sparse(A);
  
  
+ %%
  
  
- 
- k=3;  ##bumber of sources
+ k=2;
 trails=10;
 Npred=zeros(1,25,trails);
 for (i=1:trails)
    U(1:N,1:N)=0; 
-   U(randperm(N-2,k)+1,randperm(N-2,k)+1)=100;  ##randomly choses k sources
+   p1=randperm(N-2,k);
+   p2=randperm(N-2,k);
+   
+   for (j=1:k)
+   U(p1(1,j)+1,p2(1,j)+1)=1000;
+   end
+   
    U=abs(U);
    Unit=U;
    Unitv= reshape(Unit,[N^2,1]);
    meas=(A^Ncount)*Unitv;
-   [Npred(:,:,i),~] = Npredict2D_new(meas,20,A);
+   [Npred(:,:,i),~] = Npredict_new2D(meas,70,A);
 end

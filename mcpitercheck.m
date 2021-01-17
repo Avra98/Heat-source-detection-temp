@@ -32,7 +32,7 @@ A(Nx,:)=zeros(1,Nx);
 A(:,1)=zeros(1,Nx);
 A(:,Nx)=zeros(1,Nx);
 
-
+sigma=0.5;
 k=3;
 trails=10;
 Npred=zeros(1,35,trails);
@@ -42,7 +42,7 @@ for (i=1:trails)
    U=abs(U);
    Unit=U;
    meas=(A^Ncount)*Unit';
-   [Npred(:,:,i),~] = Npredict_new(meas,200,A);
-end
-
+  % meas=abs(meas+sigma*randn(size(meas)));
    
+   [Npred(:,:,i),~] = Npredict_new1D(meas,50,A);
+end
