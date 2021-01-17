@@ -1,4 +1,4 @@
-function [Npred,upred]= Npredict(meas,N0,A)
+function [Npred,upred]= Npredict1D(meas,N0,A)
 % N0 is the intial guess of N.
 %[p,d,~]=svd(A);
 %eps=0.1; %l2 ball constraint 
@@ -9,7 +9,7 @@ M=(A^(N0));
 penalty = 'MCP';
 %penalty= 'POWER';
 
-   upred = lsq_sparsereg(M,meas,1,'penalty',penalty,'penparam',100);
+   upred = lsq_sparsereg(M,meas,1,'penalty',penalty,'penparam',100);  
    %upred = lsq_sparsereg(M,meas,1,'penalty',penalty,'penparam',1);
     %upred= l1opt(M,meas,0.5);
 
