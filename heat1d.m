@@ -1,142 +1,48 @@
-D=D%------------------------------------------------------------------------
-%--- Heat Equation in two dimensions-------------------------------------
-%--- Solves Ut=alpha*(Uxx+Uyy)-------------------------------------------
-%------------------------------------------------------------------------
-clc;
-close all;
-clear all;
-%--dimensions...........................................................
-N = 1000;  
-DX=0.1; % step size
+Dx=1; % step size
 %DY=0.1;
-Nx=1000; 
+Nx=1000;
 %Ny=5;
-X=0:DX:Nx;
-%Y=0:DY:Ny;
-alpha=5; % arbitrary thermal diffusivity 
+X=1:Dx:Nx;
+%Y=0:DY:Ny;=127; % arbitrary thermal diffusivity (units in mm^2/sec)
+alpha_silver=165.6;
+alpha_al=97;
+alpha_si=88;
+alpha_fe=23;
+alpha_air=19;
+alpha=35;
 %--boundary conditions----------------------------------------------------
-U(1:N) = 0 ;
-%U(1,1:N) = 0; 
-%U(N,1:N) = 0;  
-%U(1:N,1) = 0;  
-%U(1:N,N) = 0;  
-%--initial condition------------------------------------------------------
-U(150)=1000;% a heated patch at the center
-U(500)=1000;
-U(750)=1000;
-%U=U+10*rand(1,1000);
-U=abs(U);
+U(1:Nx) = 0 ;
+s(1:1000)=1/(2*alpha);
 
-Umax=max(max(U)); 
-%-------------------------------------------------------------------------
-DT = DX^2/(2*alpha); % time step 
-s=1/(2*alpha);
-M=2000; % maximum number of allowed iteration
-%---finite difference scheme----------------------------------------------
-fram=0;
-Ncount=0;
-loop=1;
-t=[(1-2*s) s zeros(1,N-3) s];
-A = gallery('circul',t);
-A(1,:)=zeros(1,N);
-A(N,:)=zeros(1,N);
-A(:,1)=zeros(1,N);
-A(:,N)=zeros(1,N);
-Unit=U;
-while loop==1;
-   ERR=0; 
-   U_old = U;
-for i = 2:N-1
+Ncount=1500;
 
-   Residue=s*(U_old(i+1)-2*U_old(i)+U_old(i-1))+ U_old(i)-U(i);
-   ERR=ERR+abs(Residue);
-  U(i)=U(i)+Residue;
+%%Consider Nx interior points, two boundary points at the extreme. 
+A=zeros(Nx,Nx);
+
+%Filling up intereior pointa
+for i=2:Nx-1
+        A(i,i)=1-2*s(i);
+        A(i,i-1)=s(i);
+        A(i,i+1)=s(i);
 end
-if(ERR>=0.000001*Umax)  % allowed error limit is 1% of maximum temperature
-    Ncount=Ncount+1;
-         if (mod(Ncount,10)==0) % displays movie frame every 10 time steps
-              fram=fram+1;
-              plot(U);
-              %axis([1 N])
-              h=gca; 
-              get(h,'FontSize') 
-              set(h,'FontSize',12)
-              colorbar('location','eastoutside','fontsize',12);
-              xlabel('X','fontSize',12);
-              %ylabel('Y','fontSize',12);
-              title('Heat Diffusion','fontsize',12);
-              fh = figure(1);
-             set(fh, 'color', 'white'); 
-            F=getframe;
-         end
- 
- %--if solution do not converge in 2000 time steps------------------------
- 
-    if(Ncount>M)
-        loop=0;
-        disp(['solution do not reach steady state in ',num2str(M),...
-            'time steps'])
-    end
-    
- %--if solution converges within 2000 time steps..........................   
-    
-else
-    loop=0;
-    disp(['solution reaches steady state in ',num2str(Ncount) ,'time steps'])
+
+%%Dirchlet boundary conditions 
+A(1,:)=zeros(1,Nx);
+A(Nx,:)=zeros(1,Nx);
+A(:,1)=zeros(1,Nx);
+A(:,Nx)=zeros(1,Nx);
+
+sigma=0.5;
+k=3;
+trails=10;
+Npred=zeros(1,35,trails);
+for (i=1:trails)
+   U(1:Nx) = 0 ;
+   U(randperm(Nx-100,k)+100)=100;
+   U=abs(U);
+   Unit=U;
+   meas=(A^Ncount)*Unit';
+  % meas=abs(meas+sigma*randn(size(meas)));
+   
+   [Npred(:,:,i),~] = Npredict1D(meas,500,A);
 end
-end
-Afin=A^Ncount;
-Afin2=A^((Ncount-1)/2);
-Ufin=Afin*Unit';
-%------------------------------------------------------------------------
-%--display a movie of heat diffusion------------------------------------
-subplot(2,1,1)
- movie(F,fram,1)
- subplot(2,1,2)
- plot(Ufin)
- %%%%Measurements%%
- m=N;
- t=randperm(N,m);
- S=zeros(m,N);
- for(i=1:m)
-     S(i,t(i))=1;
- end
- M=S*Afin;
-% M2=S*Afin2;
- meas=M*Unit';
-% upred= OMPerr(M,meas,0.01); 
-% upred2=OMPerr(M2,meas,0.01); 
- %upred=abs(upred);
- %upred2=abs(upred2);
- %uon=M\meas;
- cvx_begin
-  variable upred(1000,1)
-  minimize( norm( upred, 1 ) )
-  subject to
-    meas==M*upred;
-cvx_end
- 
-
-%%
-
-s = RandStream('mt19937ar','Seed',1);
-RandStream.setGlobalStream(s);
-u0=Unit';
-Ufin = (A^1000)*u0;
-
-M1=S*(A^1000);
-penalty = 'MCP';           % set penalty function to lasso
-penparam = 500;
-%upred2 =  lsq_sparsereg(M,meas,penparam,'penalty',penalty);
-[upred5] = lsq_sparsereg(M1,meas,1,'penalty',penalty,'penparam',500);
- subplot(2,2,1)
- plot(Unit)
- subplot(2,2,2)
- plot(Ufin)
-  subplot(2,2,3)
- plot(upred)
- subplot(2,2,4)
- plot(upred5)
- %%
-     
-%------END---------------------------------------------------------------
