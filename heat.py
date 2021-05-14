@@ -8,26 +8,32 @@ import numpy as np
 from numpy.linalg import matrix_power
 import cvxpy as cp
 import random 
+import pywt
+import scipy
+from scipy.fft import ifft, fft, fftfreq, fftshift
+
+
 
 def l1solv(Fw1,meas,norm):
 # Create variable.
    x_l1 = cp.Variable(shape=(meas.shape[0],1))
    constraints = [x_l1>=0]
 # Form objective.
-   obj = cp.Minimize(cp.norm(x_l1, norm)+cp.norm(Fw1.numpy()@x_l1-meas, 2)**2*1e2)
+   obj = cp.Minimize(cp.norm(x_l1, norm)+cp.norm(Fw1.numpy()@x_l1-meas, 2)**2*1e3)
 # Form and solve problem.
    prob = cp.Problem(obj, constraints)
    prob.solve()
+   #y = pywt.threshold(x_l1.value[:,0], 4, 'hard')
+   #x2 = torch.from_numpy(y)
    x2 = torch.from_numpy(x_l1.value[:,0]).cpu().type(dtype=torch.float32)
    return torch.norm(x2,0.5)
-   #return net1(x2)
 
 def l1rec(Fw1,meas,norm):
 # Create variable.
    x_l1 = cp.Variable(shape=(meas.shape[0],1))
    constraints = [x_l1>=0]
 # Form objective.
-   obj = cp.Minimize(cp.norm(x_l1, norm)+cp.norm(Fw1.numpy()@x_l1-meas, 2)**2*1e2)
+   obj = cp.Minimize(cp.norm(x_l1, norm)+cp.norm(Fw1.numpy()@x_l1-meas, 2)**2*1e3)
 # Form and solve problem.
    prob = cp.Problem(obj, constraints)
    prob.solve()
@@ -36,9 +42,9 @@ def l1rec(Fw1,meas,norm):
 
 
 def slope(N,A,meas):
-    F_Nr=l1solv(torch.matrix_power(A, int(N+20)),meas,2)
-    F_Nl=l1solv(torch.matrix_power(A, int(N-20)),meas,2)
-    return (F_Nr-F_Nl)/40        
+    F_Nr=l1solv(torch.matrix_power(A, int(N+5)),meas,2)
+    F_Nl=l1solv(torch.matrix_power(A, int(N-5)),meas,2)
+    return (F_Nr-F_Nl)/10        
 
 
 def search2(lf=100,rb=2500,walk=100,iter=100):
@@ -62,9 +68,24 @@ def search2(lf=100,rb=2500,walk=100,iter=100):
             
         
         
+def search3(lf=100,walk=50,iter=200):
+    meas, measn, u, A,Fw = gensingledata(n=500,alpha=20,m=5,Ncount=1000,sigma=1)
+    for j in range(iter):
+        if (lf>900):
+            walk = 10
+        slf =slope(lf,A,meas)
+        if slf<0:
+            print(lf,slf)
+            lf=lf+walk
+        elif slf>0:
+            print('Solution has been reached')  
+            break
+        
+        
+        
+        
 
-
-def genData(n=500,alpha=20,k=5,N=1000,Ncount=1000):
+def genData(n=500,alpha=20,k=5,N=1000,Ncount=1000,sigma=1):
     source = torch.zeros(n,N)
     wsource = torch.zeros(n,N)
     A=makeA1d(n,alpha)
@@ -74,17 +95,20 @@ def genData(n=500,alpha=20,k=5,N=1000,Ncount=1000):
         Unit[torch.randint(0,n-2,(k,))+1,0]=1000*torch.rand(k)
         source[:,i]=Unit.T
         meas = Fw @ Unit
+        measn= meas+sigma*torch.rand(meas.shape)
         offset = torch.randint(-900,900,(1,))
-        wsource[:,i] = l1rec(torch.matrix_power(A, Ncount+int(offset)),meas,2)
+        wsource[:,i] = l1rec(torch.matrix_power(A, Ncount+int(offset)),measn,2)
     return source, wsource    
 
 def makeA1d(n=500,alpha=20):
     A=torch.zeros((n,n))
-    s=1/(2*alpha)
+    s=torch.zeros((n,1))
+    s[0:int(n/2)]=1/(2*alpha)
+    s[int(n/2):n-1]=1/(2*alpha)
     for i in range(0,n-1):
-        A[i,i]=1-2*s
-        A[i,i-1]=s
-        A[i,i+1]=s
+        A[i,i]=1-2*s[i]
+        A[i,i-1]=s[i]
+        A[i,i+1]=s[i]
     A[:,0]=0
     A[0,:]=0
     A[:,n-1]=0
@@ -121,13 +145,14 @@ def makeA2d(n=10,alpha=20):
 
             
 def gensingledata(n=500,alpha=20,m=5,Ncount=1000,sigma=0.1):
-    torch.random.seed()
+    #torch.random.seed()
     A=makeA1d(n,alpha)
     u=torch.zeros((n,1))
-    np.random.seed(0)
-    k = np.random.randint(0,n-50,m)
-    torch.manual_seed(0)
-    u[k+25] = 1000*torch.rand(m,1)
+    #np.random.seed(0)
+    k = np.random.randint(0,n-200,m)
+    #torch.manual_seed(0)
+    u[k+100] = 1000*torch.rand(m,1)
+    #u[253]=759
     Fw=torch.matrix_power(A, Ncount)
     meas=Fw@u
     measn= meas+sigma*torch.rand(meas.shape)
@@ -135,7 +160,7 @@ def gensingledata(n=500,alpha=20,m=5,Ncount=1000,sigma=0.1):
 
 
 
-def gensingledata2d(n=50,alpha=50,m=4,Ncount=1000,sigma=0.1):
+def gensingledata2d(n=50,alpha=20,m=5,Ncount=5000,sigma=0.1):
     A2d=makeA2d(n,alpha)
     u=torch.zeros(n,n)
     np.random.seed(0)
@@ -152,57 +177,40 @@ def gensingledata2d(n=50,alpha=50,m=4,Ncount=1000,sigma=0.1):
     return u,ures,meas,mres,A2d
         
     
+    ###random walk search algorithm when the ratio of old norm to the new norm is more than one it always takes the accepted step. 
+    ##But when the ratio is less than one, it decides to take a step at the outcome of a uniform proboality distribution output 
     
-def searchalgo(lf=400,rb=3000,walk=300,iter=100):
-    mid = (lf+rb)/2
-    meas, measn, u, A,Fw = gensingledata(n=500,alpha=20,m=5,Ncount=1000,sigma=0.04)
-    Fl = l1solv(torch.matrix_power(A, int(lf)),meas,2)
-    Fr = l1solv(torch.matrix_power(A, int(rb)),meas,2)
-    
-    #thr=1e-5*np.linalg.norm(meas)
-    thr=20e4
-    for j in range(iter):
-        if j==40:
-            walk = 300
-        if (Fl>thr) & (Fr>thr):
-          mid = lf + np.random.randint(-walk,walk)
-          Fm = l1solv(torch.matrix_power(A, int(mid)),meas,2)
-          if Fm>thr:
-              if mid > lf:
-                 lf = mid
-          else:
-            if mid <rb:
-              rb = mid
-
-        elif Fl<thr:
-            lf = lf/2
+def searchalgo(lf=1000,iter=1000):
+    meas, measn, u, A,Fw = gensingledata(n=500,alpha=20,m=5,Ncount=5000,sigma=1)
+    for j in range(iter):   
+        Fl=l1solv(torch.matrix_power(A, lf),measn,2)
+        lf2=int(lf+100*np.random.randn())
+        Fl2=l1solv(torch.matrix_power(A, lf2),measn,2)
+        print(lf,lf2,Fl/Fl2)
+        if ((Fl/Fl2)>np.random.uniform(0.97,1)):
+            lf=lf2
         else:
-            rb = rb+1000
-        est=max(lf,rb)
-        Fl= l1solv(torch.matrix_power(A, int(lf)),meas,2)
-        Fr= l1solv(torch.matrix_power(A, int(rb)),meas,2)
-        #sl=slope(est)
-        #print(sl)
-        #print(Fm)
-        print('left:{:.1f},right:{:.1f}, estimation:{:.1f}'.format(lf,rb,est))
-    return est        
+            lf=lf
+
             
-def plotnormvsN(lw=1000,rb=9000,points=200):
+            
+            
+def plotnormvsN(lw=1000,rb=10000,points=100):
     N1 = torch.linspace(lw,rb,points)
     F=torch.zeros_like(N1)
-    meas, measn, u, A,Fw = gensingledata(n=500,alpha=20,m=15,Ncount=5000,sigma=0.5)
-    #u,ures,meas,mres,A2d= gensingledata2d(n=30,alpha=20,m=4,Ncount=500,sigma=0.1)
+    meas, measn, u, A,Fw = gensingledata(n=500,alpha=20,m=5,Ncount=5000,sigma=1)
+    print(torch.norm(meas,1)/torch.norm(u,1))
     for i in range(0,points):
-        F[i]= l1solv(torch.matrix_power(A, int(N1[i])),measn,2)
+        F[i]= l1solv(torch.matrix_power(A, int(N1[i])),meas,2)
     plt.plot(N1.detach().numpy(),F.detach().numpy())
     plt.xlabel('Ncount')
     plt.ylabel('Defined norm')
-    plt.title('Norm vs ncount for 1D with Ncount=5000 but with 5 spikes with noise amplitude 1.')
-    plt.savefig('figures/Ncount5000.svg', format='svg', dpi=1200)
+    #plt.title(' network norm')
+    #plt.savefig('figures/network_norm_N10000.svg', format='svg', dpi=1200)
     return F,N1
 
 def perreco(noise=False,sigma=0.04):
-   meas, measn, u, A,Fw = gensingledata(n=500,alpha=20,m=5,Ncount=2000,sigma=0.04)
+   meas, measn, u, A,Fw = gensingledata(n=500,alpha=20,m=5,Ncount=500,sigma=0.04)
    x_l1 = cp.Variable(shape=(meas.shape[0],1))
    if (noise==False): 
        constraints = [Fw.numpy()@x_l1==meas]
